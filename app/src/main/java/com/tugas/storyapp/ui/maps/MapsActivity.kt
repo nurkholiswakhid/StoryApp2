@@ -1,76 +1,56 @@
-package com.mirz.storyapp.ui.maps
+package com.tugas.storyapp.ui.maps
 
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import com.tugas.storyapp.R
+import com.tugas.storyapp.databinding.ActivityMapsBinding
+import com.tugas.storyapp.ui.viewmodels.MapsViewModel
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
-import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.android.gms.maps.model.MarkerOptions
-import com.mirz.storyapp.Locator
-import com.mirz.storyapp.R
-import com.mirz.storyapp.databinding.ActivityMapsBinding
-import com.mirz.storyapp.utils.ResultState
-import com.mirz.storyapp.utils.launchAndCollectIn
+import dagger.hilt.android.AndroidEntryPoint
+import kotlin.text.Typography.dagger
 
-
+@AndroidEntryPoint
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
+    private lateinit var binding: ActivityMapsBinding
     private lateinit var mMap: GoogleMap
-    private val binding by lazy { ActivityMapsBinding.inflate(layoutInflater) }
-    private val viewModel by viewModels<MapsViewModel>(factoryProducer = { Locator.mapsViewModelFactory })
+    private val mapsViewModel: MapsViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        binding = ActivityMapsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
-        val mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
-
-        mapFragment.getMapAsync(this@MapsActivity)
-        viewModel.getStories()
-
+        binding.mapView.onCreate(savedInstanceState)
+        binding.mapView.getMapAsync(this)
     }
 
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
-        mMap.setMapStyle(MapStyleOptions.loadRawResourceStyle(this@MapsActivity, R.raw.map_style))
-        displayMarker()
-    }
-
-    override fun onResume() {
-        super.onResume()
-    }
-
-    private fun displayMarker() {
-        viewModel.mapsState.launchAndCollectIn(this) {
-            when (it.resultStories) {
-                is ResultState.Success -> {
-                    binding.progressBar.visibility = android.view.View.GONE
-                    it.resultStories.data?.forEach { story ->
-                        val position = LatLng(story.lat, story.lng)
-                        mMap.addMarker(MarkerOptions().position(position).title(story.name))
-                        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(position, 5f))
-                    }
-                }
-
-                is ResultState.Error -> {
-                    binding.progressBar.visibility = android.view.View.GONE
-                    Toast.makeText(this@MapsActivity, it.resultStories.message, Toast.LENGTH_SHORT)
-                        .show()
-                }
-
-                is ResultState.Loading -> binding.progressBar.visibility = android.view.View.VISIBLE
-
-                else -> Unit
+        mMap.setMapStyle(
+            com.google.android.gms.maps.model.MapStyleOptions.loadRawResourceStyle(
+                this, R.raw.custom_map_style
+            )
+        )
+        mapsViewModel.getStoriesWithLocation().observe(this) { stories ->
+            stories.forEach { story ->
+                val position = LatLng(story.latitude, story.longitude)
+                mMap.addMarker(
+                    MarkerOptions()
+                        .position(position)
+                        .title(story.name)
+                        .snippet(story.description)
+                )
+            }
+            if (stories.isNotEmpty()) {
+                val firstStory = LatLng(stories[0].latitude, stories[0].longitude)
+                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(firstStory, 10f))
             }
         }
     }
-
-
 }
